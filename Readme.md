@@ -64,6 +64,26 @@ docker-compose exec iamlive kill -HUP 1
 
 The IAM policies will be written to the `./iamlive/volumes/iam.policy` file.
 
+## Terraform Provider Configuration
+
+There are a few gotchas when using with terraform and they have to do with the provider configuration. Thie setup does not do authentication and it expects S3 requests to use Path style instead of Virtual Host syle requests.
+
+That means you need to include the following settings in your provider configuration:
+
+```hcl title="/terraform/main.tf"
+provider "aws" {
+  ...
+ skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
+  s3_use_path_style           = true
+}
+```
+
+If you don't include these settings you may see `terraform apply` and `terraform plan` hang as they wait for validation or the account id.
+
+Instead you can set the account id to with the `IAMLIVE_AWS_ACCOUNT_ID` environment variable in the `docker-compose.yaml` file.
+
 ## Troubleshooting
 
 ##### "CA key file exists without bundle file"
@@ -72,6 +92,7 @@ If you see this error when starting the `iamlive` container, it may mean that `c
 
 - Stop the containers with `docker-compose down`
 - remove the `ca.pem` and `ca.key` files from the `./iamlive/volumes` directory
+- Start the containers with `docker-compose up`
 
 ##### Terraform command hangs
 
