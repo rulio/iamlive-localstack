@@ -1,0 +1,57 @@
+version: "3"
+services:
+  iamlive:
+    build: ./iamlive
+    volumes:
+      - ./iamlive/volume/:/root/.iamlive
+    command:
+      [
+        "--aws-redirect-host",
+        "localstack:4566",
+        "--output-file",
+        "/root/.iamlive/iam.policy",
+        "--account-id",
+        "${IAMLIVE_AWS_ACCOUNT_ID}",
+      ]
+  terraform:
+    image: hashicorp/terraform
+    working_dir: /var/app
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./terraform:/var/init
+      # mount ./iamlive cert which is created anew on every run
+      # entrypoint.sh will update certificates.
+      - ./iamlive/volume:/usr/local/share/ca-certificates/
+      - ${TERRAFORM_TEMPLATES_DIR}:/var/app
+    entrypoint: ["/var/init/entrypoint.sh"]
+    environment:
+      - AWS_ACCESS_KEY_ID="DUMMY_AWS_ACCESS_KEY_ID"
+      - AWS_SECRET_ACCESS_KEY="DUMMY_AWS_SER_SECRET_ACCESS_KEY"
+      - HTTP_PROXY=http://iamlive:10080
+      - HTTPS_PROXY=http://iamlive:10080
+    depends_on:
+      - iamlive
+      - localstack
+  localstack:
+    container_name: "${LOCALSTACK_DOCKER_NAME:-localstack-main}"
+    image: localstack/localstack
+    ports:
+      - "127.0.0.1:4566:4566" # LocalStack Gateway
+      - "127.0.0.1:4510-4559:4510-4559" # external services port range
+    environment:
+      # LocalStack configuration: https://docs.localstack.cloud/references/configuration/
+      - DEBUG=${DEBUG:-0}
+  aws:
+    image: amazon/aws-cli
+    tty: true
+    stdin_open: true
+    command: ["help"]
+    volumes:
+      - ./iamlive/volume:/.iamlive
+    environment:
+      - HTTP_PROXY=http://iamlive:10080
+      - HTTPS_PROXY=http://iamlive:10080
+      - AWS_CA_BUNDLE=/.iamlive/ca.pem
+      - AWS_ACCESS_KEY_ID="DUMMY_USER_ACCESS_KEY_ID"
+      - AWS_SECRET_ACCESS_KEY="DUMMY_USER_SECRET_ACCESS_KEY"
